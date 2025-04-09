@@ -1,6 +1,7 @@
 # Solana Stake Authority Changer
 
 A tool for securely changing stake account authorities on the Solana blockchain using Fireblocks for transaction signing.
+[Learn more about Stake Accounts Authorities](https://solana.com/docs/references/staking/stake-accounts#understanding-account-authorities).
 
 ## Overview
 
@@ -17,7 +18,7 @@ This tool automates the process of transferring authority (both staker and withd
 - TypeScript
 - Fireblocks account with API credentials
 - Solana Beach API key
-- Two Fireblocks Vault accounts (source and destination)
+- Two Fireblocks Vault accounts (existing authority and new authority)
 
 Fireblocks Workspace Configuration:
 1. Make sure that RAW signing is enabled in your workspace
@@ -29,8 +30,8 @@ Fireblocks Workspace Configuration:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/solana-change-authority.git
-cd solana-change-authority
+git clone https://github.com/fireblocks/change-authorities.git
+cd change-authorities
 ```
 
 Install dependencies:
