@@ -19,6 +19,12 @@ This tool automates the process of transferring authority (both staker and withd
 - Solana Beach API key
 - Two Fireblocks Vault accounts (source and destination)
 
+Fireblocks Workspace Configuration:
+1. Make sure that RAW signing is enabled in your workspace
+2. [Create an API key](https://developers.fireblocks.com/docs/manage-api-keys)
+3. [Create a Transaction Authorization Policy Rule for RAW signing](https://developers.fireblocks.com/docs/set-transaction-authorization-policy)
+
+
 ## Installation
 
 1. Clone the repository:
