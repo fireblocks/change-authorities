@@ -26,6 +26,10 @@ export class SolanaAuthorityOrchestrator {
       throw new Error("New authority vault ID is required");
     }
 
+    if(newAuthorityVaultId < currentAuthorityVaultId) {
+      throw new Error("New authority vault ID cannot be older than current authority vault ID");
+    }
+
     this.currentAuthorityVaultId = currentAuthorityVaultId;
     this.newAuthorityVaultId = newAuthorityVaultId;
 
@@ -72,6 +76,8 @@ export class SolanaAuthorityOrchestrator {
     }
   }
 
+
+  
   /**
    * Write transaction results to a CSV file
    */
@@ -168,6 +174,8 @@ export class SolanaAuthorityOrchestrator {
         `No new authority found for vault ID: ${this.newAuthorityVaultId}`
       );
     }
+
+    
     console.log(`New authority address: ${newAuthorityAddress}`);
 
     // Validate authorities are different
@@ -186,32 +194,9 @@ export class SolanaAuthorityOrchestrator {
     console.log(
       `Fetching stake accounts for address: ${existingAuthorityAddress}`
     );
-    // const stakeAccounts = (await solanaBeachService.getStakeAccountsForAddress(
-    //   existingAuthorityAddress
-    // ));
-
-    const stakeAccounts = [
-      {
-        pubkey: {
-          address: "2o1yo5dVev19xFc23KqEDovh94MsH4A2xqdnTv1DEX5F",
-        },
-      },
-      {
-        pubkey: {
-          address: "3dgzgZUifNMS7p6zuXjSmfvEQGLRDfiN99LfKcpDcwh6",
-        },
-      },
-      {
-        pubkey: {
-          address: "AxHKQy49aVs9VYtVDTiXeeb5tnabgokSpwrGivvXXvor",
-        },
-      },
-      {
-        pubkey: {
-          address: "GgUBGnnCkcPN5fzetSmPXCBQFjHV7zEQQx9bKiBD3Jcd",
-        },
-      },
-    ];
+    const stakeAccounts = (await solanaBeachService.getStakeAccountsForAddress(
+      existingAuthorityAddress
+    ));
 
     // Validate stake accounts exist
     if (!stakeAccounts || stakeAccounts.length === 0) {

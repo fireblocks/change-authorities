@@ -65,6 +65,10 @@ class SolanaBeachService {
         })
       );
 
+      if (firstPageResponse.status !== 200) {
+        throw new Error(`Error fetching stake accounts: ${firstPageResponse.statusText}`);
+      }
+
       const totalPages = firstPageResponse.data.totalPages;
       let allStakeAccounts = [...firstPageResponse.data.data];
 
