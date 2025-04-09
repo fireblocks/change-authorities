@@ -9,6 +9,11 @@ type StakeAccountsResponse = {
   data: {};
 };
 
+type PaginatedResponse = {
+  totalPages: number;
+  data: StakeAccountsResponse[];
+};
+
 class SolanaBeachService {
   private readonly url = "https://api.solanabeach.io/v1";
   private requestQueue: (() => void)[] = [];
@@ -47,16 +52,55 @@ class SolanaBeachService {
     address: string
   ): Promise<StakeAccountsResponse[]> => {
     try {
-      const response = await this.rateLimitedRequest(() => 
-        axios.get(`${this.url}/account/${address}/stakes`, {
+      // Get first page and check total pages
+      const firstPageResponse = await this.rateLimitedRequest(() => 
+        axios.get<PaginatedResponse>(`${this.url}/account/${address}/stakes`, {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${process.env.SOLANA_BEACH_API_KEY}`,
           },
+          params: {
+            page: 1
+          }
         })
       );
 
-      return response.data.data;
+      if (firstPageResponse.status !== 200) {
+        throw new Error(`Error fetching stake accounts: ${firstPageResponse.statusText}`);
+      }
+
+      const totalPages = firstPageResponse.data.totalPages;
+      let allStakeAccounts = [...firstPageResponse.data.data];
+
+      console.log(`Found ${totalPages} total pages of stake accounts for ${address}`);
+      
+      // Fetch remaining pages if there are any
+      if (totalPages > 1) {
+        // Create an array of page numbers from 2 to totalPages
+        const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
+        
+        // We'll fetch pages sequentially to respect rate limits
+        for (const pageNum of remainingPages) {
+          console.log(`Fetching page ${pageNum} of ${totalPages}...`);
+          
+          const pageResponse = await this.rateLimitedRequest(() => 
+            axios.get<PaginatedResponse>(`${this.url}/account/${address}/stakes`, {
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${process.env.SOLANA_BEACH_API_KEY}`,
+              },
+              params: {
+                page: pageNum
+              }
+            })
+          );
+          
+          allStakeAccounts = [...allStakeAccounts, ...pageResponse.data.data];
+        }
+      }
+      
+      console.log(`Total stake accounts fetched: ${allStakeAccounts.length}`);
+      return allStakeAccounts;
     } catch (error) {
       console.error("Error fetching stake accounts:", error);
       throw error;
