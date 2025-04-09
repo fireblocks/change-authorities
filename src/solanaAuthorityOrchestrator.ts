@@ -26,7 +26,7 @@ export class SolanaAuthorityOrchestrator {
       throw new Error("New authority vault ID is required");
     }
 
-    if(newAuthorityVaultId < currentAuthorityVaultId) {
+    if(parseFloat(newAuthorityVaultId) < parseFloat(currentAuthorityVaultId)) {
       throw new Error("New authority vault ID cannot be older than current authority vault ID");
     }
 
