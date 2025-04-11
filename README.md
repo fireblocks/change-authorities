@@ -5,12 +5,11 @@ A tool for securely changing stake account authorities on the Solana blockchain 
 
 ## Overview
 
-This tool automates the process of transferring authority (both staker and withdrawer) on Solana stake accounts. It uses Fireblocks as a secure signing service and supports batch processing of multiple stake accounts.
+This tool automates the process of the following operations:
 
-## Features
+- **Batch Authority Changes**: Transferring authority (both staker and withdrawer) on Solana stake accounts.
+- **Withdraw Funds**: Withdrawing the entire balance of an inactive stake account to the current authority address.
 
-- **Batch Authority Changes**: Change authorities on multiple stake accounts in a single transaction (up to 6 accounts per transaction)
-- **Secure Transaction Signing**: Uses Fireblocks for secure transaction signing
 
 ## Prerequisites
 
@@ -41,15 +40,35 @@ npm install -g typescript
 npm install
 ```
 
+
+## Usage
+
+### Changing the Authorities on your stake account
+
 Create a `.env` file with the following variables:
 
 ```bash
 FIREBLOCKS_API_KEY=your_fireblocks_api_key
 FIREBLOCKS_API_SECRET_PATH=/path/to/your/fireblocks_secret.key
 SOLSCAN_API_KEY='solscan API key'
-CURRENT_AUTHORITY_VAULT_ID=0
-NEW_AUTHORITY_VAULT_ID=1
+CURRENT_AUTHORITY_VAULT_ID='<your existing authority vault account ID>'
+NEW_AUTHORITY_VAULT_ID='<your new authority vault account ID>'
+OPERATION='change-authority'
 ```
+
+
+### Withdrawing funds from an inactive stake account
+
+Create a `.env` file with the following variables:
+
+```bash
+FIREBLOCKS_API_KEY=your_fireblocks_api_key
+FIREBLOCKS_API_SECRET_PATH=/path/to/your/fireblocks_secret.key
+SOLSCAN_API_KEY='solscan API key'
+CURRENT_AUTHORITY_VAULT_ID='<your existing authority vault account ID>'
+OPERATION='withdraw'
+```
+
 
 ## Usage
 Run the tool:

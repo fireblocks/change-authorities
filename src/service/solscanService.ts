@@ -1,13 +1,16 @@
 import axios from "axios";
 require("dotenv").config();
 
-
 type StakeAccountsResponse = {
   pubkey: {
     address: string;
   };
   lamports: number;
   data: {};
+  status: string;
+  delegated_stake_amount: number;
+  total_reward: number;
+  sol_balance: number;
 };
 
 interface SolscanResponse {
@@ -17,6 +20,8 @@ interface SolscanResponse {
     sol_balance: number;
     status: string;
     role: string[];
+    total_reward: string,
+    delegated_stake_amount: string,
   }[];
   metadata: any;
 }
@@ -92,13 +97,18 @@ class SolscanService {
         if (response.data.data && response.data.data.length > 0) {
           console.log(`Received ${response.data.data.length} stake accounts from page ${currentPage}`);
           
-          // Transform Solscan response to match previously used Solana Beach response structure
+          // Transform and keep all relevant data from Solscan response
           const transformedData: StakeAccountsResponse[] = response.data.data.map(account => ({
             pubkey: {
               address: account.stake_account
             },
             lamports: account.sol_balance,
-            data: {}
+            data: {},
+            
+            status: account.status ? account.status.toLowerCase() : "",
+            delegated_stake_amount: parseFloat(account.delegated_stake_amount || "0"),
+            total_reward: parseFloat(account.total_reward || "0"),
+            sol_balance: account.sol_balance
           }));
           
           allStakeAccounts = [...allStakeAccounts, ...transformedData];
