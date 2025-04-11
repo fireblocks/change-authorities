@@ -206,11 +206,10 @@ export class SolanaAuthorityOrchestrator {
 
     
     console.log("Fetching authority address...");
-    // const authorityAddress = await this.fireblocksSigner.getAddressForVault(
-    //   this.currentAuthorityVaultId
-    // );
+    const authorityAddress = await this.fireblocksSigner.getAddressForVault(
+      this.currentAuthorityVaultId
+    );
 
-    const authorityAddress = 'AXksWTZtgXsDTg2PFe5mzgdshD3Zib2vRUVTeg2s98W3';
     
     if (!authorityAddress) {
       throw new Error(
