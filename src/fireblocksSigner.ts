@@ -10,7 +10,6 @@ import {
 import * as fs from "fs";
 
 
-
 export class FireblocksSigner {
   private fireblocks: Fireblocks;
   private apiKey: string;
@@ -110,9 +109,17 @@ export class FireblocksSigner {
   public signTransaction = async (
     dataToSign: { content: string }[],
     vaultAccountId: string,
+    operation: string,
     newAuthorityAddress: string,
-    newAuthorityVaultId: string
+    newAuthorityVaultId?: string
   ): Promise<TransactionResponse> => {
+
+    let txNote;
+    if(operation == 'changeAuthority') {
+      txNote = `Changing authority for Solana Stake account. New authority VA is ${newAuthorityVaultId} and new authority address is ${newAuthorityAddress}`;
+    } else if (operation == 'withdraw') {
+      txNote = `Withdrawing funds from Solana stake accounts to vault account: ${vaultAccountId}`;
+    }
     try {
       const tx = await this.fireblocks.transactions.createTransaction({
         transactionRequest: {
@@ -127,7 +134,7 @@ export class FireblocksSigner {
               messages: [...dataToSign],
             },
           },
-          note: `Changing authority for Solana Stake account. New authority VA is ${newAuthorityVaultId} and new authority address is ${newAuthorityAddress}`
+          note: txNote
         },
       });
 

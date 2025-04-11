@@ -1,24 +1,22 @@
 import { FireblocksSigner } from "./fireblocksSigner";
 import { solscanService } from "./service/solscanService";
 import { SolanaSerializer, web3 } from "./solanaSerializer";
-import * as fs from "fs";
-import * as path from "path";
-
+import { processBatchedTransactions, writeChangeAuthorityResultsToCsv, writeResultsToWithdrawalCsv } from "./utils";
 
 export class SolanaAuthorityOrchestrator {
   private currentAuthorityVaultId: string;
   private newAuthorityVaultId: string;
   private fireblocksSigner: FireblocksSigner;
   private solanaSerializer: SolanaSerializer;
-  private readonly MAX_ACCOUNTS_PER_TX = 6; 
+  private readonly MAX_ACCOUNTS_PER_AUTHORITY_TX = 6;
+  private readonly MAX_ACCOUNTS_PER_WITHDRAW_TX = 4;
 
   constructor(currentAuthorityVaultId: string, newAuthorityVaultId: string) {
-    
-    if (!currentAuthorityVaultId) {
+    if (!currentAuthorityVaultId && process.env.OPERATION.toLowerCase() == "withdraw") {
       throw new Error("Current authority vault ID is required");
     }
 
-    if (!newAuthorityVaultId) {
+    if (!newAuthorityVaultId && process.env.OPERATION.toLowerCase() == "change-authority") {
       throw new Error("New authority vault ID is required");
     }
 
@@ -32,7 +30,6 @@ export class SolanaAuthorityOrchestrator {
     this.solanaSerializer = new SolanaSerializer();
   }
 
-  
   private validateEnvironment(): void {
     const requiredEnvVars = [
       "FIREBLOCKS_API_KEY",
@@ -65,85 +62,21 @@ export class SolanaAuthorityOrchestrator {
       );
     }
   }
-
-  /**
-   * Write transaction results to a CSV file
-   */
-  private writeResultsToCsv(
-    results: {
-      stakeAccounts: string[];
-      currentAuthority: string;
-      newAuthority: string;
-      txHash?: string;
-      status: string;
-      errorMessage?: string;
-      timestamp: string;
-    }[]
-  ): string {
-    
-    const outputDir = path.join(process.cwd(), "reports");
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir, { recursive: true });
-    }
-
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = path.join(
-      outputDir,
-      `authority-change-results-${timestamp}.csv`
-    );
-
-    const header = [
-      "Timestamp",
-      "Transaction Hash",
-      "Status",
-      "Error Message",
-      "Current Authority",
-      "New Authority",
-      "Stake Accounts"
-    ].join(",");
-
-
-    const rows = results.map((result) =>
-      [
-        result.timestamp,
-        result.txHash || "",
-        result.status,
-        result.errorMessage?.replace(/,/g, ";") || "",
-        result.currentAuthority,
-        result.newAuthority,
-        `"${result.stakeAccounts.join("; ")}"`
-      ].join(",")
-    );
-
-    fs.writeFileSync(filename, [header, ...rows].join("\n"));
-
-    return filename;
-  }
+  
 
   public changeAuthorities = async (): Promise<void> => {
-    
-    const txResults: {
-      stakeAccounts: string[];
-      currentAuthority: string;
-      newAuthority: string;
-      txHash?: string;
-      status: string;
-      errorMessage?: string;
-      timestamp: string;
-    }[] = [];
-
     console.log("Starting batch authority change process...");
     console.log(`Current Authority Vault ID: ${this.currentAuthorityVaultId}`);
     console.log(`New Authority Vault ID: ${this.newAuthorityVaultId}`);
 
-    if(parseInt(this.currentAuthorityVaultId) > parseInt(this.newAuthorityVaultId)) {
+    if (parseInt(this.currentAuthorityVaultId) > parseInt(this.newAuthorityVaultId)) {
       throw new Error("New authority vault account has to be a newer account than the current authority vault account");
     }
 
-    if(parseInt(this.currentAuthorityVaultId) === parseInt(this.newAuthorityVaultId)) {
+    if (parseInt(this.currentAuthorityVaultId) === parseInt(this.newAuthorityVaultId)) {
       throw new Error("New authority vault account has to be a different account than the current authority vault account");
     }
-    
+
     console.log("Fetching existing authority address...");
     const existingAuthorityAddress =
       await this.fireblocksSigner.getAddressForVault(
@@ -157,7 +90,6 @@ export class SolanaAuthorityOrchestrator {
     }
     console.log(`Existing authority address: ${existingAuthorityAddress}`);
 
-
     console.log("Fetching new authority address...");
     const newAuthorityAddress = await this.fireblocksSigner.getAddressForVault(
       this.newAuthorityVaultId
@@ -167,7 +99,7 @@ export class SolanaAuthorityOrchestrator {
         `No new authority found for vault ID: ${this.newAuthorityVaultId}`
       );
     }
-    
+
     console.log(`New authority address: ${newAuthorityAddress}`);
 
     const existingAuthorityPubKey = new web3.PublicKey(existingAuthorityAddress);
@@ -197,33 +129,19 @@ export class SolanaAuthorityOrchestrator {
 
     console.log(`Processing ${validStakeAccounts.length} valid stake accounts`);
 
-    // Split stake accounts into transaction sized batches
-    const txBatches: web3.PublicKey[][] = [];
-    for (let i = 0; i < validStakeAccounts.length; i += this.MAX_ACCOUNTS_PER_TX) {
-      const accountBatch = validStakeAccounts.slice(i, i + this.MAX_ACCOUNTS_PER_TX);
-      txBatches.push(accountBatch.map(account => new web3.PublicKey(account.pubkey.address)));
-    }
-
-    console.log(`Split stake accounts into ${txBatches.length} transaction batches of up to ${this.MAX_ACCOUNTS_PER_TX} accounts each`);
-
-    let totalSuccessCount = 0;
-    let totalFailureCount = 0;
-
-    // Process each transaction batch
-    for (let txBatchIndex = 0; txBatchIndex < txBatches.length; txBatchIndex++) {
-      const txBatch = txBatches[txBatchIndex];
-      console.log(`\n----- Processing Transaction ${txBatchIndex + 1}/${txBatches.length} (${txBatch.length} accounts) -----`);
-      
-      try {
+    // Process authority changes in batches
+    const { results } = await processBatchedTransactions(
+      validStakeAccounts,
+      this.MAX_ACCOUNTS_PER_AUTHORITY_TX,
+      async (batch) => {
         
-        console.log("Stake accounts in this transaction:");
-        txBatch.forEach((pk, i) => console.log(`  ${i+1}. ${pk.toString()}`));
+        const pubkeys = batch.map(account => new web3.PublicKey(account.pubkey.address));
         
-        // Build a single transaction with multiple authority change instructions
-        console.log(`Building transaction for ${txBatch.length} accounts...`);
-        const { transaction, serializedTransaction } = 
+        // Build transaction for authority changes
+        console.log(`Building transaction for ${batch.length} accounts...`);
+        const { serializedTransaction } = 
           await this.solanaSerializer.buildBatchChangeAuthoritiesTx(
-            txBatch,
+            pubkeys,
             existingAuthorityPubKey,
             newAuthorityPubKey
           );
@@ -233,6 +151,7 @@ export class SolanaAuthorityOrchestrator {
         const signatureResponse = await this.fireblocksSigner.signTransaction(
           [{ content: serializedTransaction }],
           this.currentAuthorityVaultId,
+          "changeAuthority",
           newAuthorityAddress,
           this.newAuthorityVaultId
         );
@@ -257,61 +176,144 @@ export class SolanaAuthorityOrchestrator {
           existingAuthorityPubKey
         );
 
-        console.log(`Transaction sent successfully: ${txId}`);
-        console.log(`Changed authorities for ${txBatch.length} stake accounts in a single transaction`);
-        
-        // Add to transaction results
-        txResults.push({
-          stakeAccounts: txBatch.map(pk => pk.toString()),
-          currentAuthority: existingAuthorityAddress,
-          newAuthority: newAuthorityAddress,
+        return {
           txHash: txId,
-          status: "Success",
-          timestamp: new Date().toISOString(),
-        });
-        
-        totalSuccessCount += txBatch.length;
-        
-      } catch (error: any) {
-        // Record failure
-        console.error(`Error processing transaction ${txBatchIndex + 1}:`, error);
-        
-        let errorMessage = "Unknown error";
-        
-        // Extract error message
-        if (error.message) {
-          errorMessage = error.message;
-        }
-        
-        if (error.logs) {
-          console.error("Transaction logs:", error.logs);
-          errorMessage += ` - Logs: ${error.logs.join("; ")}`;
-        }
-        
-        // Add to transaction results
-        txResults.push({
-          stakeAccounts: txBatch.map(pk => pk.toString()),
-          currentAuthority: existingAuthorityAddress,
-          newAuthority: newAuthorityAddress,
-          status: "Failed",
-          errorMessage,
-          timestamp: new Date().toISOString(),
-        });
-        
-        totalFailureCount += txBatch.length;
-      }
-    }
+          status: "Success"
+        };
+      },
+      (account) => account.pubkey.address
+    );
 
-    // Print overall summary
-    console.log("\n===== TRANSACTION SUMMARY =====");
-    console.log(`Total transactions: ${txBatches.length}`);
-    console.log(`Total stake accounts: ${validStakeAccounts.length}`);
-    console.log(`Successfully processed stake accounts: ${totalSuccessCount}`);
-    console.log(`Failed stake accounts: ${totalFailureCount}`);
-    
+    // Transform results for CSV
+    const txResults = results.map(result => ({
+      stakeAccounts: result.items,
+      currentAuthority: existingAuthorityAddress,
+      newAuthority: newAuthorityAddress,
+      txHash: result.txHash,
+      status: result.status,
+      errorMessage: result.errorMessage,
+      timestamp: result.timestamp
+    }));
 
     // Write all results to CSV
-    const csvFilename = this.writeResultsToCsv(txResults);
+    const csvFilename = writeChangeAuthorityResultsToCsv(txResults);
     console.log(`All transaction results written to CSV file: ${csvFilename}`);
+  };
+
+  public withdrawFromInactiveAccounts = async (): Promise<void> => {
+    console.log("Starting withdrawal from inactive stake accounts process...");
+    console.log(`Authority Vault ID: ${this.currentAuthorityVaultId}`);
+
+    
+    console.log("Fetching authority address...");
+    const authorityAddress = await this.fireblocksSigner.getAddressForVault(
+      this.currentAuthorityVaultId
+    );
+    
+    if (!authorityAddress) {
+      throw new Error(
+        `No authority found for vault ID: ${this.currentAuthorityVaultId}`
+      );
+    }
+    console.log(`Authority address: ${authorityAddress}`);
+
+    const authorityPubKey = new web3.PublicKey(authorityAddress);
+
+    // Fetch stake accounts
+    console.log(`Fetching stake accounts for address: ${authorityAddress}`);
+    const stakeAccounts = await solscanService.getStakeAccountsForAddress(
+      authorityAddress
+    );
+
+    if (!stakeAccounts || stakeAccounts.length === 0) {
+      throw new Error(
+        `No stake accounts found for address: ${authorityAddress}`
+      );
+    }
+    console.log(
+      `Found ${stakeAccounts.length} stake accounts for authority: ${authorityAddress}`
+    );
+
+    // Filter inactive accounts
+    const inactiveAccounts = stakeAccounts.filter(
+      (account) => account.status === "inactive"
+    );
+    console.log(
+      `Found ${inactiveAccounts.length} inactive stake accounts out of ${stakeAccounts.length} total accounts`
+    );
+
+    if (inactiveAccounts.length === 0) {
+      console.log("No inactive accounts found to withdraw from");
+      return;
+    }
+
+    // Process withdrawals in batches
+    const { results } = await processBatchedTransactions(
+      inactiveAccounts,
+      this.MAX_ACCOUNTS_PER_WITHDRAW_TX,
+      async (batch) => {
+        
+        console.log(
+          `Building transaction for withdrawing from ${batch.length} inactive accounts...`
+        );
+        const { serializedTransaction } =
+          await this.solanaSerializer.buildInactiveAccountsWithdrawTx(
+            batch,
+            authorityPubKey
+          );
+
+        // Send transaction to Fireblocks for signing
+        console.log(`Sending withdrawal transaction to Fireblocks for signing...`);
+        const signatureResponse = await this.fireblocksSigner.signTransaction(
+          [{ content: serializedTransaction }],
+          this.newAuthorityVaultId,
+          "withdraw",
+          authorityAddress
+        );
+
+        // Validate signature response
+        if (
+          !signatureResponse.signedMessages ||
+          signatureResponse.signedMessages.length === 0
+        ) {
+          throw new Error("No signed messages returned from Fireblocks");
+        }
+
+        const signedMessage = signatureResponse.signedMessages[0];
+        const signatureHex = signedMessage.signature?.fullSig;
+
+        if (!signatureHex) {
+          throw new Error("Missing signature from Fireblocks");
+        }
+
+        // Send the signed transaction
+        console.log(`Sending signed withdrawal transaction to Solana network...`);
+        const txId = await this.solanaSerializer.sendSignedTransaction(
+          serializedTransaction,
+          signatureHex,
+          authorityPubKey
+        );
+
+        return {
+          txHash: txId,
+          status: "Success",
+        };
+      },
+      (account) => account.pubkey.address
+    );
+
+    // Transform results for CSV
+    const txResults = results.map((result) => ({
+      stakeAccounts: result.items,
+      authority: authorityAddress,
+      txHash: result.txHash,
+      status: result.status,
+      errorMessage: result.errorMessage,
+      timestamp: result.timestamp,
+    }));
+
+    // Write results to CSV
+    const csvFilename = writeResultsToWithdrawalCsv(txResults);
+    console.log(`Withdrawal transaction results written to CSV file: ${csvFilename}`);
   };
 }

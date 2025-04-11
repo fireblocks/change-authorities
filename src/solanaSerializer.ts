@@ -1,12 +1,27 @@
 import * as web3 from "@solana/web3.js";
 export { web3 };
 
-
 type ChangeAuthoritiesTxResult = {
   transaction: web3.Transaction;
   serializedTransaction: string;
 };
 
+type StakeAccountInfo = {
+  address: string;
+  delegated_stake_amount: number;
+  total_reward: number;
+  status: string;
+};
+
+type StakeAccountsResponse = {
+  pubkey: {
+    address: string;
+  };
+  delegated_stake_amount: number;
+  total_reward: number;
+  status: string;
+  sol_balance: number;
+};
 
 export class SolanaSerializer {
   private connection: web3.Connection;
@@ -18,7 +33,6 @@ export class SolanaSerializer {
   public getConnection(): web3.Connection {
     return this.connection;
   }
-
 
   public async buildBatchChangeAuthoritiesTx(
     stakeAccounts: web3.PublicKey[],
@@ -62,6 +76,45 @@ export class SolanaSerializer {
     };
   }
 
+  public async buildInactiveAccountsWithdrawTx(
+    stakeAccountsInfo: StakeAccountsResponse[],
+    authority: web3.PublicKey,
+  ): Promise<ChangeAuthoritiesTxResult> {
+    const tx = new web3.Transaction();
+    
+    const recentBlockhash = await this.connection.getLatestBlockhash();
+    tx.recentBlockhash = recentBlockhash.blockhash;
+    tx.feePayer = authority;
+    
+    console.log(`Using blockhash: ${recentBlockhash.blockhash} for all instructions`);
+    
+  
+    
+    for (const accountInfo of stakeAccountsInfo) {
+      const stakeAccount = new web3.PublicKey(accountInfo.pubkey.address);
+      
+
+      // Leave for rent exemption
+      const totalAmount = accountInfo.sol_balance - 3000000;
+      console.log(`Adding withdraw instruction for account ${accountInfo.pubkey.address} with amount ${totalAmount / web3.LAMPORTS_PER_SOL} SOL`);
+      
+      tx.add(web3.StakeProgram.withdraw({
+        stakePubkey: stakeAccount,
+        authorizedPubkey: authority,
+        toPubkey: authority,        
+        lamports: totalAmount
+      }));
+    }
+    
+    const serializedTx = tx.serializeMessage();
+    
+    console.log(`Transaction size: ${serializedTx.length} bytes (max: 1232 bytes)`);
+    
+    return {
+      transaction: tx,
+      serializedTransaction: serializedTx.toString("hex")
+    };
+  }
 
   public async sendSignedTransaction(
     serializedMessage: string,
