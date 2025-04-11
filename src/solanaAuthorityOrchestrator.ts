@@ -209,6 +209,7 @@ export class SolanaAuthorityOrchestrator {
     const authorityAddress = await this.fireblocksSigner.getAddressForVault(
       this.currentAuthorityVaultId
     );
+
     
     if (!authorityAddress) {
       throw new Error(
@@ -266,7 +267,7 @@ export class SolanaAuthorityOrchestrator {
         console.log(`Sending withdrawal transaction to Fireblocks for signing...`);
         const signatureResponse = await this.fireblocksSigner.signTransaction(
           [{ content: serializedTransaction }],
-          this.newAuthorityVaultId,
+          this.currentAuthorityVaultId,
           "withdraw",
           authorityAddress
         );
@@ -316,4 +317,6 @@ export class SolanaAuthorityOrchestrator {
     const csvFilename = writeResultsToWithdrawalCsv(txResults);
     console.log(`Withdrawal transaction results written to CSV file: ${csvFilename}`);
   };
+
+
 }
