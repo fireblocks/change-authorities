@@ -9,7 +9,7 @@ This tool automates the process of transferring authority (both staker and withd
 
 ## Features
 
-- **Batch Authority Changes**: Change authorities on multiple stake accounts in a single operation
+- **Batch Authority Changes**: Change authorities on multiple stake accounts in a single transaction (up to 6 accounts per transaction)
 - **Secure Transaction Signing**: Uses Fireblocks for secure transaction signing
 
 ## Prerequisites
@@ -17,7 +17,7 @@ This tool automates the process of transferring authority (both staker and withd
 - Node.js 18+
 - TypeScript
 - Fireblocks account with API credentials
-- Solana Beach API key
+- Solscan API Key
 - Two Fireblocks Vault accounts (existing authority and new authority)
 
 Fireblocks Workspace Configuration:
@@ -46,7 +46,7 @@ Create a `.env` file with the following variables:
 ```bash
 FIREBLOCKS_API_KEY=your_fireblocks_api_key
 FIREBLOCKS_API_SECRET_PATH=/path/to/your/fireblocks_secret.key
-SOLANA_BEACH_API_KEY=your_solana_beach_api_key
+SOLSCAN_API_KEY='solscan API key'
 CURRENT_AUTHORITY_VAULT_ID=0
 NEW_AUTHORITY_VAULT_ID=1
 ```
