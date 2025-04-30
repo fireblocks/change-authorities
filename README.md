@@ -1,6 +1,6 @@
 # Solana Stake Authority Changer
 
-A tool for securely changing stake account authorities on the Solana blockchain using Fireblocks for transaction signing.
+A tool for securely changing stake account authorities on the Solana blockchain using Fireblocks RAW Signing feature.
 [Learn more about Stake Accounts Authorities](https://solana.com/docs/references/staking/stake-accounts#understanding-account-authorities).
 
 ## Overview
